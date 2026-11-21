@@ -83,9 +83,13 @@ wire[10:0] pixel_x, pixel_y;
 
 // Sync generator
 	
+// The sync generator free-runs and ignores the CPU reset. Holding it in reset
+// stopped HSync/VSync for the whole ~2.5 ms reset pulse (core load, ROM load,
+// OSD reset), so a CRT lost sync and flashed pink. The display address
+// generator resynchronises on the next VSync, so nothing else needs it.
 vga_sync SyncGenerator(
 	.clk (clk),
-	.res (res),
+	.res (1'b0),
 	
 	.h_disp       (ntsc ? hDisp_NTSC      : hDisp_VGA),
 	.h_sync_start (ntsc ? hSyncStart_NTSC : hSyncStart_VGA),
