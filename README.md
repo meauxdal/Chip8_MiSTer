@@ -14,6 +14,7 @@ SuperChip has traditionally been implemented as a virtual machine, but this is a
 Press F12 to bring up the OSD. From here you can select a .CH8-file to load.
 
 Video output timings match COSMAC VIP (original CHIP-8 target). 15.7kHz support (60Hz SD CRT).
+The Borders option is makes the OSD larger over analog; by default it is scrunched.
 
 The menu also allows the CPU speed to be selected. Some games are better played on slow, some on fast.
 

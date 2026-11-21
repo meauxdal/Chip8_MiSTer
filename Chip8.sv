@@ -15,7 +15,7 @@ module emu
 localparam CONF_STR = {
 	"Chip8;;",
 	"-;",
-	"F1,CH8,Load Program;",
+	"F1,CH8SC8,Load Program;",
 	"-;",
 	"O[2],CPU Speed,Fast,Slow;",
 	"-;",
@@ -27,6 +27,7 @@ localparam CONF_STR = {
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O[6:5],Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"O[10:8],Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
+	"O[20],Borders,Hide,Show;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire,Extra,Key A,Key B,Key C,Key D,Key E,Key F;",
@@ -209,29 +210,32 @@ assign cpu_clk = status[2] ? clk_cpu_slow : clk_cpu_fast;
 
 // Reset circuit
 
-wire error_posedge;
-util_posedge ErrorPosedge(clk_12k, 0, error, error_posedge);
-
-wire downloading_negedge;
-util_negedge downloadingNegedge(clk_12k, 0, rom_download, downloading_negedge);
-
-wire button1_posedge;
-util_posedge ButtonPosedge(clk_12k, 0, buttons[1] | status[0] | RESET, button1_posedge);
-
-reg [4:0] reset_count = 0;
 reg reset = 0;
+reg [16:0] reset_count = 0;
+reg reset_trigger_d = 0;
+reg rom_download_d = 0;
+reg error_d = 0;
 
-always @(posedge clk_12k) begin
+wire reset_trigger = buttons[1] | status[0] | RESET;
+
+always @(posedge clk_sys) begin
+	reset_trigger_d <= reset_trigger;
+	rom_download_d <= rom_download;
+	error_d <= error;
+
 	if (reset) begin
-		if (reset_count[4]) begin
+		if (reset_count == 17'd124999) begin
 			reset <= 1'b0;
 			reset_count <= 0;
 		end else begin
 			reset_count <= reset_count + 1'b1;
-		end;
-	end else if (downloading_negedge || button1_posedge || error_posedge) begin
+		end
+	end else if ((reset_trigger && !reset_trigger_d) ||
+	             (!rom_download && rom_download_d) ||
+	             (error && !error_d)) begin
 		reset <= 1'b1;
-	end;
+		reset_count <= 0;
+	end
 end
 
 
@@ -242,6 +246,7 @@ wire [15:0] current_opcode;
 
 wire core_hs, core_vs;        // negative sync
 wire core_hblank, core_vblank; // these frame the playfield only
+wire core_raster_hblank, core_raster_vblank;
 wire core_pixel;
 
 chip8 chip8machine(
@@ -260,6 +265,8 @@ chip8 chip8machine(
 	.vga_vsync(core_vs),
 	.vga_pixel(core_pixel),
 	.vga_hblank(core_hblank),
+	.vga_raster_hblank(core_raster_hblank),
+	.vga_raster_vblank(core_raster_vblank),
 	.vga_vblank(core_vblank),
 
 	.cpu_opcode(current_opcode),
@@ -301,7 +308,7 @@ always @(*) begin
 		3'd1:    pal = {24'hFFBF5A, 24'h000000}; // Amber
 		3'd2:    pal = {24'h8FFF63, 24'h000000}; // Green
 		3'd3:    pal = {24'h000000, 24'hFFFFFF}; // Inverted
-		3'd4:    pal = {24'h6D6D55, 24'hDBDB55}; // LCD, the core's old look
+		3'd4:    pal = {24'h6D6D55, 24'hDBDB55}; // LCD
 		3'd5:    pal = pal_custom;
 		default: pal = {24'hFFFFFF, 24'h000000};
 	endcase
@@ -325,8 +332,8 @@ always @(posedge CLK_VIDEO) begin
 	if (ce_next) begin
 		vid_hs <= ~core_hs;
 		vid_vs <= ~core_vs;
-		vid_hblank <= core_hblank;
-		vid_vblank <= core_vblank;
+		vid_hblank <= status[20] ? core_raster_hblank : core_hblank;
+		vid_vblank <= status[20] ? core_raster_vblank : core_vblank;
 		vid_rgb <= core_pixel ? pal[47:24] : pal[23:0];
 	end
 end

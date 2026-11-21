@@ -38,6 +38,8 @@ module vga_block(
 	input  [15:0]	fbuf_data,
 
 	output			hblank,
+	output			raster_hblank,
+	output			raster_vblank,
 	output			pixel_on
 );
 
@@ -111,6 +113,8 @@ wire[10:0] disp_pixel_x = ntsc ? pixel_x - (768 - 512) / 2 : pixel_x;
 wire disp_display_enable = display_enable & (disp_pixel_x < pf_width);
 
 assign hblank = !(pixel_x < (ntsc ? hDisp_NTSC : hDisp_VGA) && disp_pixel_x < pf_width);
+assign raster_hblank = !(pixel_x < (ntsc ? hDisp_NTSC : hDisp_VGA));
+assign raster_vblank = !(pixel_y < (ntsc ? vDisp_NTSC : vDisp_VGA));
 
 display Display(
 	.clk (clk),

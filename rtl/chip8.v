@@ -52,7 +52,9 @@ module chip8(
 	input [11:0]	upload_addr,
 	input [7:0]		upload_data,
 	
-	output			error
+	output			error,
+	output			vga_raster_hblank,
+	output			vga_raster_vblank
 );
 
 wire vga_hires; 			// whether to use the hires display
@@ -174,6 +176,8 @@ vga_block Vga(
 	.beam_outside (vga_beam_outside),
 	.display_enable(vga_de),
 	.hblank (vga_hblank),
+	.raster_hblank (vga_raster_hblank),
+	.raster_vblank (vga_raster_vblank),
 	.pixel_on (vga_pixel),
 	
 	.red   (vga_red), 
