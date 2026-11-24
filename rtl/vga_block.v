@@ -73,8 +73,16 @@ wire [10:0] vEnd_NTSC       = 262 - 1;
 wire hsync_syncgen;
 wire vsync_syncgen;
 
+// VSync only changes on the leading edge of HSync. The sync generator flips
+// v_sync at the start of a line (h_pos 0), well after HSync has ended; sys
+// XORs VSync into composite sync, so that put stray sync edges mid-line and
+// upset the horizontal lock of a CRT on csync/sync-on-green.
+reg hsync_syncgen_d;
+
 always @(posedge clk) begin
-	vsync <= !vsync_syncgen;
+	hsync_syncgen_d <= hsync_syncgen;
+	if (hsync_syncgen & ~hsync_syncgen_d)
+		vsync <= !vsync_syncgen;
 	hsync <= ntsc ^ hsync_syncgen;
 end
 
