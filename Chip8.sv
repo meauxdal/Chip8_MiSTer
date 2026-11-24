@@ -210,31 +210,41 @@ assign cpu_clk = status[2] ? clk_cpu_slow : clk_cpu_fast;
 
 // Reset circuit
 
-reg reset = 0;
+// The core starts in reset and stays there until Main has configured it.
+// For 8-bit cores Main sets status[0] right after identifying the core,
+// writes the saved status, and clears status[0] last. Until status[0] has
+// been seen high once, the status bits are not yet the user's (Borders
+// would read as Hide), so hold reset and blank video until then. RESET,
+// status[0] and the OSD button hold reset for as long as they are high;
+// the ~2.5 ms stretch applies after the last of them drops. ROM download
+// end and CPU error still trigger a reset on their edge.
+
+reg reset = 1;
 reg [16:0] reset_count = 0;
-reg reset_trigger_d = 0;
 reg rom_download_d = 0;
 reg error_d = 0;
+reg configured = 0;
 
-wire reset_trigger = buttons[1] | status[0] | RESET;
+wire reset_hold = buttons[1] | status[0] | RESET | ~configured;
 
 always @(posedge clk_sys) begin
-	reset_trigger_d <= reset_trigger;
 	rom_download_d <= rom_download;
 	error_d <= error;
 
-	if (reset) begin
+	if (status[0]) configured <= 1'b1;
+
+	if (reset_hold ||
+	    (!rom_download && rom_download_d) ||
+	    (error && !error_d)) begin
+		reset <= 1'b1;
+		reset_count <= 0;
+	end else if (reset) begin
 		if (reset_count == 17'd124999) begin
 			reset <= 1'b0;
 			reset_count <= 0;
 		end else begin
 			reset_count <= reset_count + 1'b1;
 		end
-	end else if ((reset_trigger && !reset_trigger_d) ||
-	             (!rom_download && rom_download_d) ||
-	             (error && !error_d)) begin
-		reset <= 1'b1;
-		reset_count <= 0;
 	end
 end
 
@@ -325,7 +335,12 @@ reg [23:0] vid_rgb;
 
 wire ce_next = scandoubler ? (ce_cnt == 2'd3) : ce_cnt[0];
 
+// Sync runs from power-up, but the picture stays black until Main has sent
+// the status bits (see the reset circuit).
+reg [1:0] configured_v = 0;
+
 always @(posedge CLK_VIDEO) begin
+	configured_v <= {configured_v[0], configured};
 	ce_cnt <= ce_cnt + 2'd1;
 	ce_pix <= ce_next;
 
@@ -334,7 +349,8 @@ always @(posedge CLK_VIDEO) begin
 		vid_vs <= ~core_vs;
 		vid_hblank <= status[20] ? core_raster_hblank : core_hblank;
 		vid_vblank <= status[20] ? core_raster_vblank : core_vblank;
-		vid_rgb <= core_pixel ? pal[47:24] : pal[23:0];
+		vid_rgb <= !configured_v[1] ? 24'h000000 :
+		           core_pixel ? pal[47:24] : pal[23:0];
 	end
 end
 
